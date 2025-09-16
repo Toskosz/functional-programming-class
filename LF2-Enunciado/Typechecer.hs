@@ -37,7 +37,7 @@ typeCheckP (Prog fs) = let nCtx = updatecF [] fs in
 {- TODO: na definição de "typeCheckF" abaixo,substitua "undefined" 
          pelo argumento relevante -}                                                
 typeCheckF ::  TContext -> Function -> R TContext    
-typeCheckF tc (Fun tR _ decls exp) = tke (parameterTypeBindings ++ functionTypes) undefined tR
+typeCheckF tc (Fun tR _ decls exp) = tke (parameterTypeBindings ++ functionTypes) exp tR
                                         where parameterTypeBindings = map (\(Dec tp id) -> (id,tp)) decls
                                               functionTypes = filter (\(i,t) -> case t of 
                                                                                  TFun _  _ -> True 
@@ -82,18 +82,31 @@ tinf tc x  =  case x of
    "exp" deve ser inteiro (Tint), e os tipos de "expT" e "expE" devem ser iguais.
    @dica: estude a estrutura da checagem de tipo do "SIf" na LI2Tipada. 
 -}  
-    eIf@(EIf exp expT expE) -> undefined
+    eIf@(EIf exp expT expE) -> let r = tke tc exp Tint in
+                                case r of
+                                   OK tc2 -> let r2 = tinf tc2 expT in
+                                              case r2 of
+                                                 OK tipExpT -> let r3 = tinf tc2 expE in
+                                                                case r3 of
+                                                                   OK tipExpE -> let r4 = tipExpT == tipExpE in
+                                                                                  if r4
+                                                                                  then OK tipExpT
+                                                                                  else Erro "Expressoes no if nao batem"
+                                                                   Erro msg -> Erro msg
+                                                 Erro msg -> Erro msg
+                                   Erro msg -> Erro msg
+
 -- TODO: sobre "ECall" abaixo, a lógica permanece a mesma em relação a LI2Tipada ? Por que? 
     ECall id lexp   -> let r = lookup tc id in 
                         case r of 
-                           OK (TFun tR pTypes) -> if (length pTypes == length lexp)
+                           OK (TFun tR pTypes) -> if length pTypes == length lexp
                                                     then 
-                                                      if (isThereError tksArgs /= [])
+                                                      if isThereError tksArgs /= []
                                                         then Erro " @typechecker: chamada de funcao invalida"
                                                         else OK tR
                                                       else Erro " @typechecker: tamanhos diferentes de lista de argumentos e parametros"
                                                          where tksArgs = zipWith (tke tc) lexp pTypes
-                                                               isThereError l = filter (==False) 
+                                                               isThereError l = filter not
                                                                                        (map (\e->(let r2 = e in  
                                                                                                     case r2 of
                                                                                                       OK _ -> True
