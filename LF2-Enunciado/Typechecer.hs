@@ -4,7 +4,7 @@ import AbsLF
 import Prelude hiding (lookup)
 import PrintLF
 
-data R a = OK a | Erro String                                   
+data R a = OK a | Erro String
          deriving (Eq, Ord, Show, Read)
 
 isError e = case e of
