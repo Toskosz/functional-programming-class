@@ -1,17 +1,20 @@
 module Interpreter where
 
 import AbsLF
-import Tests
+-- import Tests
 import Prelude hiding (lookup)
 
-getName :: Function -> Ident
-getName (Fun name _ _) = name
+getType :: Function -> Type
+getType (Fun t _ _ _) = t
 
-getParams :: Function -> [Ident]
-getParams (Fun _ params _) = params
+getName :: Function -> Ident
+getName (Fun _ name _ _) = name
+
+getParams :: Function -> [Decl]
+getParams (Fun _ _ params _) = params
 
 getExp :: Function -> Exp
-getExp (Fun _ _ expression) = expression
+getExp (Fun _ _ _ expression) = expression
 
 executeP :: Program -> Valor
 executeP (Prog fs) = eval (updatecF [] fs) (expMain fs)
@@ -44,7 +47,7 @@ eval context x = case x of
   ECall id lexp -> eval (paramBindings ++ contextFunctions) (getExp funDef)
     where
       (ValorFun funDef) = lookup context id
-      parameters = getParams funDef
+      parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
       paramBindings = zip parameters (map (eval context) lexp)
       contextFunctions =
         filter
