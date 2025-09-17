@@ -36,6 +36,7 @@ eval context x = case x of
   EInt n -> ValorInt n
   EVar id -> lookup context id
   {- dica: estude a semântica do "SIf" na LI2 e saiba explicar a diferença -}
+  -- SIf nao retorna
   EIf exp expT expE ->
     if i (eval context exp) /= 0
       then eval context expT
@@ -45,6 +46,8 @@ eval context x = case x of
     where
       (ValorFun funDef) = lookup context id
       parameters = getParams funDef
+      -- identificador x valor
+      -- funcoes como valores ?
       paramBindings = zip parameters (map (eval context) lexp)
       contextFunctions =
         filter
