@@ -1,0 +1,11 @@
+Resolved TODOs:
+
+Optimizer.hs:
+- L39: substitua "undefined" abaixo pela otimização correspondente ao tipo de expressão.
+- L76: saiba explicar o motivo da otimização abaixo
+- L79: crie um programa exemplo em que a otimização abaixo seja usada
+
+Typechecer.hs:
+- L37: na definição de "typeCheckF" abaixo,substitua "undefined" pelo argumento relevante
+- L81: implemente a checagem de tipo para o "EIf" abaixo:
+- L99: sobre "ECall" abaixo, a lógica permanece a mesma em relação a LI2Tipada ? Por que?
