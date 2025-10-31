@@ -106,13 +106,13 @@ subst rc exp = case exp of
 {- TODO:
   sobre a implementacao finalizada de subst:
   1) qual eh o caso base?
-     R: O caso `_ -> exp` (literais) e `EVar id` (que termina a recursão para um ramo).
+     R: O caso _ -> exp (literais) e EVar id (que termina a recursão para um ramo).
   2) como descrever o numero de casos recursivos? depende (in)diretamente de algo?
-     R: O número de casos recursivos corresponde ao número de construtores de `Exp` que contêm subexpressões. Depende diretamente da definição da AST.
+     R: O número de casos recursivos corresponde ao número de subexpressoes da Exp inicial. nao sei responder.
   3) qual a finalidade dos casos recursivos?
      R: Propagar a substituição por toda a árvore da expressão, garantindo que todas as subexpressões sejam processadas.
   4) por que a linha 64 eh diferente dos outros casos recursivos?
-     R: Porque `ELambda` cria um novo escopo. É preciso modificar o contexto (`rc`) para remover os parâmetros do lambda, evitando a captura incorreta de variáveis (shadowing).
+     R: Porque ELambda cria um novo escopo. precisa modificar o contexto (rc) para remover os parâmetros do lambda, evitando a substituicao incorreta de variáveis.
   5) numa especificacao textual intuitiva e concisa (semelhante ao comentario na linha 59),
      qual a linha mais importante entre 62-77 ?
      R: `EVar id -> bind id rc`, pois é onde a substituição da variável por seu valor efetivamente ocorre.
