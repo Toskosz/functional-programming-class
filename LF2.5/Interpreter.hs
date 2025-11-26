@@ -69,18 +69,19 @@ eval context x = case x of
           else eval ctx0 expE
   {- @dica: não altere o resto, mas saiba explicar o funcionamento -}
   ECall id lexp -> case lookup context id of
-    (ValorFun funDef) -> eval (paramBindings ++ contextFunctions) (getExp funDef)
-      where
-        parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
-        onlyValues = map (\(value, ctx) -> value) (map (eval context) lexp)
-        paramBindings = zip parameters onlyValues
-        contextFunctions =
-          filter
-            ( \(i, v) -> case v of
-                ValorFun _ -> True
-                _ -> False
-            )
-            context
+    (ValorFun funDef) ->
+      let parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
+          onlyValues = map (\(value, ctx) -> value) (map (eval context) lexp)
+          paramBindings = zip parameters onlyValues
+          contextFunctions =
+            filter
+              ( \(i, v) -> case v of
+                  ValorFun _ -> True
+                  _ -> False
+              )
+              context
+          (res, ignoreCtx) = eval (paramBindings ++ contextFunctions) (getExp funDef)
+       in (res, context)
     value -> (value, context)
 
 -- *** @dica: nao altere o todo o codigo abaixo a partir daqui
