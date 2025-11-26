@@ -3,6 +3,7 @@ module Interpreter where
 import AbsLF
 -- import Tests
 import Prelude hiding (lookup)
+import qualified Prelude as C (Eq, Ord, Read, Show)
 
 getType :: Function -> Type
 getType (Fun t _ _ _) = t
@@ -60,7 +61,7 @@ eval context x = case x of
   ETrue -> (ValorBool True, context)
   EFalse -> (ValorBool False, context)
   EInt n -> (ValorInt n, context)
-  EVar id -> (lookup context id, context)
+  EVar id -> (lookup context (VarId id), context)
   {- dica: estude a semântica do "SIf" na LI2 e saiba explicar a diferença -}
   EIf exp expT expE ->
     let (v0, ctx0) = eval context exp
@@ -68,21 +69,26 @@ eval context x = case x of
           then eval ctx0 expT
           else eval ctx0 expE
   {- @dica: não altere o resto, mas saiba explicar o funcionamento -}
-  ECall id lexp -> case lookup context id of
-    (ValorFun funDef) ->
-      let parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
-          onlyValues = map (\(value, ctx) -> value) (map (eval context) lexp)
-          paramBindings = zip parameters onlyValues
-          contextFunctions =
-            filter
-              ( \(i, v) -> case v of
-                  ValorFun _ -> True
-                  _ -> False
-              )
-              context
-          (res, ignoreCtx) = eval (paramBindings ++ contextFunctions) (getExp funDef)
-       in (res, context)
-    value -> (value, context)
+  ECall id lexp ->
+    let onlyValues = map (\(value, ctx) -> value) (map (eval context) lexp)
+        cacheKey = MemoId id onlyValues
+     in case safeLookup context cacheKey of
+          Just cachedVal -> (cachedVal, context)
+          Nothing -> case lookup context (VarId id) of
+            (ValorFun funDef) ->
+              let parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
+                  paramBindings = zip parameters onlyValues
+
+                  paramEntries = map (\(p, v) -> (VarId p, v)) paramBindings
+                  executionEnvironment = paramEntries ++ context
+
+                  (res, ctxAfter) = eval executionEnvironment (getExp funDef)
+
+                  ctxWithCache = update ctxAfter cacheKey res
+
+                  finalCtx = removeParams ctxWithCache parameters
+               in (res, finalCtx)
+            value -> (value, context)
 
 -- *** @dica: nao altere o todo o codigo abaixo a partir daqui
 
@@ -106,6 +112,7 @@ data Valor
   | ValorBool
       { b :: Bool
       }
+  deriving (C.Eq)
 
 instance Show Valor where
   show (ValorBool b) = show b
@@ -113,16 +120,27 @@ instance Show Valor where
   show (ValorStr s) = s
   show (ValorFun f) = show f
 
+data ContextIdent
+  = VarId Ident
+  | MemoId Ident [Valor]
+  deriving (C.Eq)
+
 -- (\(Ident x) -> x) nf
 
-type RContext = [(Ident, Valor)]
+type RContext = [(ContextIdent, Valor)]
 
-lookup :: RContext -> Ident -> Valor
+lookup :: RContext -> ContextIdent -> Valor
 lookup ((i, v) : cs) s
   | i == s = v
   | otherwise = lookup cs s
 
-update :: RContext -> Ident -> Valor -> RContext
+safeLookup :: RContext -> ContextIdent -> Maybe Valor
+safeLookup [] _ = Nothing
+safeLookup ((id, v) : cs) searchId
+  | id == searchId = Just v
+  | otherwise = safeLookup cs searchId
+
+update :: RContext -> ContextIdent -> Valor -> RContext
 update [] s v = [(s, v)]
 update ((i, v) : cs) s nv
   | i == s = (i, nv) : cs
@@ -130,4 +148,11 @@ update ((i, v) : cs) s nv
 
 updatecF :: RContext -> [Function] -> RContext
 updatecF c [] = c
-updatecF c (f : fs) = updatecF (update c (getName f) (ValorFun f)) fs
+updatecF c (f : fs) = updatecF (update c (VarId (getName f)) (ValorFun f)) fs
+
+removeParams :: RContext -> [Ident] -> RContext
+removeParams ctx [] = ctx
+removeParams ((VarId id, v) : cs) (p : ps)
+  | id == p = removeParams cs ps
+  | otherwise = (VarId id, v) : removeParams cs (p : ps)
+removeParams ((MemoId id args, v) : cs) (p : ps) = removeParams cs (p : ps)
