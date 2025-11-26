@@ -3,9 +3,7 @@ int main () {
 }
 
 int fib (int n) {
- if (n-1)
-    then if (n-2)
-            then fib(n-1) + fib(n-2)
-	    else n
+ if (n/2)
+    then fib(n-1) + fib(n-2)
     else n
 }
