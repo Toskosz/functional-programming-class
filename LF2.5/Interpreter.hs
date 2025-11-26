@@ -45,7 +45,7 @@ eval context x = case x of
      in (ValorInt (i v0 * i v1), ctx1)
   EDiv exp0 exp ->
     let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval context exp
+        (v1, ctx1) = eval ctx0 exp
      in (ValorInt (i v0 `div` i v1), ctx1)
   EOr exp0 exp ->
     let (v0, ctx0) = eval context exp0
