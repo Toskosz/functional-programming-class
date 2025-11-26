@@ -1,0 +1,13 @@
+int main () {
+  // A porta do servidor será decidida em tempo de compilação
+  // baseado em macros, por exemplo:
+  //  #define PI 3.14
+  getServerPort()
+}
+
+// o macro é representada pelo valor 1.
+int getServerPort() {
+  if (1)
+    then 8080
+    else 443
+}
