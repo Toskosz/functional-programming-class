@@ -30,8 +30,9 @@ optimize exp = case exp of
 foldIfConstant :: Exp -> [Exp] -> Exp
 foldIfConstant originalExp children
   | all isLiteral children =
-      let (v, _) = eval [] originalExp
-       in wrapValueExpression v
+      let v = eval originalExp
+          (val, _) = runState v []
+       in wrapValueExpression val
   | otherwise = originalExp
 
 isLiteral :: Exp -> Bool

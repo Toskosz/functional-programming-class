@@ -1,5 +1,5 @@
 int main () {
-  fib(10)
+  fib(1000)
 }
 
 int fib (int n) {

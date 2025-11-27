@@ -5,6 +5,8 @@ import AbsLF
 import Prelude hiding (lookup)
 import qualified Prelude as C (Eq, Ord, Read, Show)
 
+type Interpreter a = State RContext a
+
 getType :: Function -> Type
 getType (Fun t _ _ _) = t
 
@@ -19,76 +21,81 @@ getExp (Fun _ _ _ expression) = expression
 
 executeP :: Program -> Valor
 executeP (Prog fs) =
-  let (returnValue, newContext) = eval (updatecF [] fs) (expMain fs)
+  let (returnValue, newContext) = runState (eval (expMain fs)) (updatecF [] fs)
    in returnValue
   where
     expMain (f : xs)
       | getName f == Ident "main" = getExp f
       | otherwise = expMain xs
 
-eval :: RContext -> Exp -> (Valor, RContext)
-eval context x = case x of
-  ECon exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorStr (s v0 ++ s v1), ctx1)
-  EAdd exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorInt (i v0 + i v1), ctx1)
-  ESub exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorInt (i v0 - i v1), ctx1)
-  EMul exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorInt (i v0 * i v1), ctx1)
-  EDiv exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorInt (i v0 `div` i v1), ctx1)
-  EOr exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorBool (b v0 || b v1), ctx1)
-  EAnd exp0 exp ->
-    let (v0, ctx0) = eval context exp0
-        (v1, ctx1) = eval ctx0 exp
-     in (ValorBool (b v0 && b v1), ctx1)
-  ENot exp -> let (v, ctx) = eval context exp in (ValorBool (not (b v)), ctx)
-  EStr str -> (ValorStr str, context)
-  ETrue -> (ValorBool True, context)
-  EFalse -> (ValorBool False, context)
-  EInt n -> (ValorInt n, context)
-  EVar id -> (lookup context (VarId id), context)
-  {- dica: estude a semântica do "SIf" na LI2 e saiba explicar a diferença -}
-  EIf exp expT expE ->
-    let (v0, ctx0) = eval context exp
-     in if i v0 /= 0
-          then eval ctx0 expT
-          else eval ctx0 expE
-  {- @dica: não altere o resto, mas saiba explicar o funcionamento -}
-  ECall id lexp ->
-    let onlyValues = map (\(value, ctx) -> value) (map (eval context) lexp)
-        cacheKey = MemoId id onlyValues
-     in case safeLookup context cacheKey of
-          Just cachedVal -> (cachedVal, context)
-          Nothing -> case lookup context (VarId id) of
-            (ValorFun funDef) ->
-              let parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
-                  paramBindings = zip parameters onlyValues
+eval :: Exp -> Interpreter Valor
+eval x = case x of
+  ECon exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorStr (s v0 ++ s v1)
+  EAdd exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorInt (i v0 + i v1)
+  ESub exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorInt (i v0 - i v1)
+  EMul exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorInt (i v0 * i v1)
+  EDiv exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorInt (i v0 `div` i v1)
+  EOr exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorBool (b v0 || b v1)
+  EAnd exp0 exp -> do
+    v0 <- eval exp0
+    v1 <- eval exp
+    return $ ValorBool (b v0 && b v1)
+  ENot exp -> do
+    v <- eval exp
+    return $ ValorBool (not (b v))
+  EStr str -> return $ ValorStr str
+  ETrue -> return $ ValorBool True
+  EFalse -> return $ ValorBool False
+  EInt n -> return $ ValorInt n
+  EVar id -> do
+    context <- get
+    return $ lookup context (VarId id)
+  EIf exp expT expE -> do
+    v0 <- eval exp
+    if i v0 /= 0
+      then eval expT
+      else eval expE
+  ECall id lexp -> do
+    argValues <- mapM eval lexp
+    let cacheKey = MemoId id argValues
+    context <- get
+    case safeLookup context cacheKey of
+      Just cachedVal -> return cachedVal
+      Nothing -> case lookup context (VarId id) of
+        (ValorFun funDef) -> do
+          let parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
+          let paramBindings = zip parameters argValues
+          let paramEntries = map (\(p, v) -> (VarId p, v)) paramBindings
 
-                  paramEntries = map (\(p, v) -> (VarId p, v)) paramBindings
-                  executionEnvironment = paramEntries ++ context
+          modify (paramEntries ++)
+          res <- eval (getExp funDef)
 
-                  (res, ctxAfter) = eval executionEnvironment (getExp funDef)
+          modify
+            ( \ctx ->
+                let ctxWithCache = update ctx cacheKey res
+                 in removeParams ctxWithCache parameters
+            )
 
-                  ctxWithCache = update ctxAfter cacheKey res
-
-                  finalCtx = removeParams ctxWithCache parameters
-               in (res, finalCtx)
-            value -> (value, context)
+          return res
+        _ -> error "Erro chamando funcao"
 
 -- *** @dica: nao altere o todo o codigo abaixo a partir daqui
 
@@ -98,6 +105,38 @@ data Valor = ValorInt Integer |
 i (ValorInt vi) = vi
 s (ValorStr vs) = vs
 -}
+
+newtype State s a = State {runState :: s -> (a, s)}
+
+instance Functor (State s) where
+  fmap f (State g) = State $ \s ->
+    let (x, s') = g s
+     in (f x, s')
+
+instance Applicative (State s) where
+  pure x = State $ \s -> (x, s)
+  (State f) <*> (State g) = State $ \s ->
+    let (func, s') = f s
+        (val, s'') = g s'
+     in (func val, s'')
+
+instance Monad (State s) where
+  return = pure
+
+  -- The 'bind' operator (>>=) chains two stateful computations
+  (State h) >>= f = State $ \s ->
+    let (val, newState) = h s -- Run the first computation
+        (State g) = f val -- Get the next function based on the result
+     in g newState
+
+get :: State s s
+get = State $ \s -> (s, s)
+
+put :: s -> State s ()
+put s = State $ const ((), s)
+
+modify :: (s -> s) -> State s ()
+modify f = State $ \s -> ((), f s)
 
 data Valor
   = ValorInt
