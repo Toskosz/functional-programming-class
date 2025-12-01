@@ -1,161 +1,141 @@
 module Typechecer where
 
 import AbsLF
-import Prelude hiding (lookup)
 import PrintLF
+import Prelude hiding (lookup)
 
 data R a = OK a | Erro String
-         deriving (Eq, Ord, Show, Read)
+  deriving (Eq, Ord, Show, Read)
 
 isError e = case e of
-    OK _ -> False
-    Erro _ -> True 
+  OK _ -> False
+  Erro _ -> True
 
+type TContext = [(Ident, Type)]
 
-type TContext = [(Ident,Type)]
+typeCheckP :: Program -> [R TContext]
+typeCheckP (Prog fs) =
+  let nCtx = updatecF [] fs
+   in case nCtx of
+        OK ctx -> map (typeCheckF ctx) fs
+        Erro msg -> [Erro msg]
 
-{-
-int main ()
-{
-  fat (5)
-}
-int fat (int n)
-{
-  if (n) then n * fat (n - 1) else 1
-}
--}
-
-test1 = Prog [Fun Tint (Ident "main") [] (ECall (Ident "fat") [EInt 5]),Fun Tint (Ident "fat") [Dec Tint (Ident "n")] (EIf (EVar (Ident "n")) (EMul (EVar (Ident "n")) (ECall (Ident "fat") [ESub (EVar (Ident "n")) (EInt 1)])) (EInt 1))]
-test2 = Prog [Fun Tint (Ident "main") [] (ECall (Ident "fat") [EAdd (EInt 5) (EInt 1)]),Fun Tint (Ident "fat") [Dec Tint (Ident "n")] (EIf (EVar (Ident "n")) (EMul (EVar (Ident "n")) (ECall (Ident "fat") [ESub (EVar (Ident "n")) (EInt 1)])) (EInt 1))]
-
-typeCheckP :: Program  -> [R TContext]
-typeCheckP (Prog fs) = let nCtx = updatecF [] fs in
-                          case nCtx of
-                             OK ctx -> map (typeCheckF ctx) fs
-                             Erro msg -> [Erro msg]
-
-{- TODO: na definição de "typeCheckF" abaixo,substitua "undefined" 
-         pelo argumento relevante -}                                                
-typeCheckF ::  TContext -> Function -> R TContext    
+{- TODO: na definição de "typeCheckF" abaixo,substitua "undefined"
+         pelo argumento relevante -}
+typeCheckF :: TContext -> Function -> R TContext
 typeCheckF tc (Fun tR _ decls exp) = tke (parameterTypeBindings ++ functionTypes) exp tR
-                                        where parameterTypeBindings = map (\(Dec tp id) -> (id,tp)) decls
-                                              functionTypes = filter (\(i,t) -> case t of 
-                                                                                 TFun _  _ -> True 
-                                                                                 _ -> False
-                                                                      ) tc
+  where
+    parameterTypeBindings = map (\(Dec tp id) -> (id, tp)) decls
+    functionTypes =
+      filter
+        ( \(i, t) -> case t of
+            TFun _ _ -> True
+            _ -> False
+        )
+        tc
 
 {- "tke" é uma função que dado, um contexto de tipos, uma expressão, e um tipo,
-   verifica se essa expressão tem esse tipo ou retorna um erro se a expressão- 
-   for mal tipada -}                                    
+   verifica se essa expressão tem esse tipo ou retorna um erro se a expressão-
+   for mal tipada -}
 tke :: TContext -> Exp -> Type -> R TContext
-tke tc exp tp = let r = tinf tc exp in
-                          case r of
-                             OK tipo -> if (tipo == tp )
-                                           then OK tc
-                                           else Erro ("@typechecker: a expressao "++ printTree exp ++ " tem tipo " ++ 
-                                                     printTree tipo ++ " mas o tipo esperado eh "
-                                                     ++ printTree tp)
-                             Erro msg -> Erro msg  
-
+tke tc exp tp = do
+  infType <- tinf tc exp
+  if infType == tp
+    then return tc
+    else
+      Erro
+        ( "@typechecker: a expressao "
+            ++ printTree exp
+            ++ " tem tipo "
+            ++ printTree infType
+            ++ " mas o tipo esperado eh "
+            ++ printTree tp
+        )
 
 {- "tinf" é uma função que dado, um contexto de tipos e uma expressão, retorna
-   o tipo dessa expressão ou um erro se a expressão for mal tipada -}                                    
+   o tipo dessa expressão ou um erro se a expressão for mal tipada -}
 tinf :: TContext -> Exp -> R Type
-tinf tc x  =  case x of
-    ECon exp0 exp  -> combChecks tc exp0 exp TStr
-    EAdd exp0 exp  -> combChecks tc exp0 exp Tint
-    ESub exp0 exp  -> combChecks tc exp0 exp Tint
-    EMul exp0 exp  -> combChecks tc exp0 exp Tint
-    EDiv exp0 exp  -> combChecks tc exp0 exp Tint
-    EOr  exp0 exp  -> combChecks tc exp0 exp Tbool
-    EAnd exp0 exp  -> combChecks tc exp0 exp Tbool
-    ENot exp       -> let r = tke tc exp Tbool in 
-                         case r of 
-                             OK _ -> OK Tbool
-                             Erro msg -> Erro msg
-    EStr str       -> OK TStr  
-    ETrue          -> OK Tbool 
-    EFalse         -> OK Tbool  
-    EInt n         -> OK Tint  
-    EVar id        -> lookup tc id
-{- TODO: implemente a checagem de tipo para o "EIf" abaixo:
-   "exp" deve ser inteiro (Tint), e os tipos de "expT" e "expE" devem ser iguais.
-   @dica: estude a estrutura da checagem de tipo do "SIf" na LI2Tipada. 
--}  
-    eIf@(EIf exp expT expE) -> let r = tke tc exp Tint in
-                                case r of
-                                   OK tc2 -> let r2 = tinf tc2 expT in
-                                              case r2 of
-                                                 OK tipExpT -> let r3 = tinf tc2 expE in
-                                                                case r3 of
-                                                                   OK tipExpE -> let r4 = tipExpT == tipExpE in
-                                                                                  if r4
-                                                                                  then OK tipExpT
-                                                                                  else Erro "Expressoes no if nao batem"
-                                                                   Erro msg -> Erro msg
-                                                 Erro msg -> Erro msg
-                                   Erro msg -> Erro msg
+tinf tc x = case x of
+  ECon exp0 exp -> combChecks tc exp0 exp TStr
+  EAdd exp0 exp -> combChecks tc exp0 exp Tint
+  ESub exp0 exp -> combChecks tc exp0 exp Tint
+  EMul exp0 exp -> combChecks tc exp0 exp Tint
+  EDiv exp0 exp -> combChecks tc exp0 exp Tint
+  EOr exp0 exp -> combChecks tc exp0 exp Tbool
+  EAnd exp0 exp -> combChecks tc exp0 exp Tbool
+  ENot exp -> do
+    _ <- tke tc exp Tbool
+    return Tbool
+  EStr _ -> return TStr
+  ETrue -> return Tbool
+  EFalse -> return Tbool
+  EInt n -> return Tint
+  EVar id -> lookup tc id
+  EIf exp expT expE -> do
+    _ <- tke tc exp Tint
+    typeT <- tinf tc expT
+    typeE <- tinf tc expE
+    if typeT == typeE
+      then return typeT
+      else Erro "Expressoes no if nao batem"
+  ECall id lexp -> checkCall tc id lexp
 
--- TODO: sobre "ECall" abaixo, a lógica permanece a mesma em relação a LI2Tipada ? Por que? 
-    ECall id lexp   -> let r = lookup tc id in 
-                        case r of 
-                           OK (TFun tR pTypes) -> if length pTypes == length lexp
-                                                    then 
-                                                      if isThereError tksArgs /= []
-                                                        then Erro " @typechecker: chamada de funcao invalida"
-                                                        else OK tR
-                                                      else Erro " @typechecker: tamanhos diferentes de lista de argumentos e parametros"
-                                                         where tksArgs = zipWith (tke tc) lexp pTypes
-                                                               isThereError l = filter not
-                                                                                       (map (\e->(let r2 = e in  
-                                                                                                    case r2 of
-                                                                                                      OK _ -> True
-                                                                                                      Erro _ -> False)) 
-                                                                                         l)
-                           Erro msg -> Erro msg
+checkCall :: TContext -> Ident -> [Exp] -> R Type
+checkCall tc id args = do
+  funcType <- lookup tc id
+  case funcType of
+    TFun returnType paramTypes -> do
+      if length paramTypes /= length args
+        then Erro "LF2 nao tem lazy loading"
+        else do
+          let pairs = zip args paramTypes
+          mapM_ (\(arg, expectedType) -> tke tc arg expectedType) pairs
+          return returnType
+    _ -> Erro "nao eh funcao"
 
-
-{- *** @dica: nao altere o codigo abaixo até o final do arquivo*** 
-              mas saiba explicar o que ele faz
--}
-                             
 combChecks :: TContext -> Exp -> Exp -> Type -> R Type
-combChecks tc exp1 exp2 tp = let r = tke tc exp1 tp in
-                                       case r of
-                                          OK _ -> let r2 = tke tc exp2 tp in
-                                                     case r2 of 
-                                                         OK _ -> OK tp
-                                                         Erro msg -> Erro msg
-                                          Erro msg -> Erro msg 
-                             
+combChecks tc exp1 exp2 tp = do
+  _ <- tke tc exp1 tp
+  _ <- tke tc exp2 tp
+  return tp
 
 lookup :: TContext -> Ident -> R Type
 lookup [] id = Erro ("@typechecker: " ++ printTree id ++ " nao esta no contexto. ")
-lookup ((id,value):cs) key
-   | id == key = OK value
-   | otherwise = lookup cs key
-
+lookup ((id, value) : cs) key
+  | id == key = OK value
+  | otherwise = lookup cs key
 
 updateTC :: TContext -> Ident -> Type -> R TContext
-updateTC [] id tp = OK [(id,tp)]
-updateTC ((id,tp):idTps) idN tpN 
+updateTC [] id tp = return [(id, tp)]
+updateTC ((id, tp) : idTps) idN tpN
   | id == idN = Erro ("@typechecker: identificador" ++ printTree id ++ " nao pode ter mais de um tipo")
-  | otherwise = let r = (updateTC idTps idN tpN) in       
-                  case r of 
-                    OK restOK -> OK ((id,tp) : restOK)    
-                    Erro msg -> Erro msg 
+  | otherwise = do
+      rest <- updateTC idTps idN tpN
+      return ((id, tp) : rest)
 
 getFunctionType :: Function -> Type
-getFunctionType (Fun tipoRetorno _ decls _) = TFun tipoRetorno (map (\(Dec tp _ )-> tp) decls)
+getFunctionType (Fun tipoRetorno _ decls _) = TFun tipoRetorno (map (\(Dec tp _) -> tp) decls)
 
 updatecF :: TContext -> [Function] -> R TContext
 updatecF tc [] = OK tc
-updatecF tc (f@(Fun _ nomeF _ _):fs) = let r = updateTC tc nomeF (getFunctionType f) in
-                                                   case r of 
-                                                     OK tcNew -> updatecF tcNew fs
-                                                     Erro msg -> Erro msg
-                                                     
-                                                     
-                                                     
+updatecF tc (f@(Fun _ nomeF _ _) : fs) =
+  let r = updateTC tc nomeF (getFunctionType f)
+   in case r of
+        OK tcNew -> updatecF tcNew fs
+        Erro msg -> Erro msg
 
+instance Functor R where
+  fmap f (OK x) = OK (f x)
+  fmap _ (Erro s) = Erro s
 
+instance Applicative R where
+  pure = OK
+  (OK f) <*> (OK x) = OK (f x)
+  (Erro s) <*> _ = Erro s
+  _ <*> (Erro s) = Erro s
+
+instance Monad R where
+  return = pure
+
+  (OK x) >>= f = f x
+  (Erro s) >>= _ = Erro s
