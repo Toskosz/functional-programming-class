@@ -67,7 +67,9 @@ eval x = case x of
   EInt n -> return $ ValorInt n
   EVar id -> do
     context <- get
-    return $ lookup context (VarId id)
+    case safeLookup context (VarId id) of
+      Just val -> return val
+      Nothing -> error ("Variavel nao existe")
   EIf exp expT expE -> do
     v0 <- eval exp
     if i v0 /= 0
@@ -79,13 +81,14 @@ eval x = case x of
     context <- get
     case safeLookup context cacheKey of
       Just cachedVal -> return cachedVal
-      Nothing -> case lookup context (VarId id) of
-        (ValorFun funDef) -> do
+      Nothing -> case safeLookup context (VarId id) of
+        Just (ValorFun funDef) -> do
           let parameters = map (\(Dec _ ident) -> ident) (getParams funDef)
           let paramBindings = zip parameters argValues
           let paramEntries = map (\(p, v) -> (VarId p, v)) paramBindings
 
           modify (paramEntries ++)
+
           res <- eval (getExp funDef)
 
           modify
@@ -96,15 +99,6 @@ eval x = case x of
 
           return res
         _ -> error "Erro chamando funcao"
-
--- *** @dica: nao altere o todo o codigo abaixo a partir daqui
-
-{-
-data Valor = ValorInt Integer |
-             ValorStr String
-i (ValorInt vi) = vi
-s (ValorStr vs) = vs
--}
 
 newtype State s a = State {runState :: s -> (a, s)}
 
@@ -123,10 +117,9 @@ instance Applicative (State s) where
 instance Monad (State s) where
   return = pure
 
-  -- The 'bind' operator (>>=) chains two stateful computations
   (State h) >>= f = State $ \s ->
-    let (val, newState) = h s -- Run the first computation
-        (State g) = f val -- Get the next function based on the result
+    let (val, newState) = h s
+        (State g) = f val
      in g newState
 
 get :: State s s
@@ -167,11 +160,6 @@ data ContextIdent
 -- (\(Ident x) -> x) nf
 
 type RContext = [(ContextIdent, Valor)]
-
-lookup :: RContext -> ContextIdent -> Valor
-lookup ((i, v) : cs) s
-  | i == s = v
-  | otherwise = lookup cs s
 
 safeLookup :: RContext -> ContextIdent -> Maybe Valor
 safeLookup [] _ = Nothing
