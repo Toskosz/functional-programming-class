@@ -20,8 +20,6 @@ typeCheckP (Prog fs) =
         OK ctx -> map (typeCheckF ctx) fs
         Erro msg -> [Erro msg]
 
-{- TODO: na definição de "typeCheckF" abaixo,substitua "undefined"
-         pelo argumento relevante -}
 typeCheckF :: TContext -> Function -> R TContext
 typeCheckF tc (Fun tR _ decls exp) = tke (parameterTypeBindings ++ functionTypes) exp tR
   where

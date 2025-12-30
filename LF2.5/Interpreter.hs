@@ -5,8 +5,6 @@ import AbsLF
 import Prelude hiding (lookup)
 import qualified Prelude as C (Eq, Ord, Read, Show)
 
-type Interpreter a = State RContext a
-
 getType :: Function -> Type
 getType (Fun t _ _ _) = t
 
@@ -28,7 +26,7 @@ executeP (Prog fs) =
       | getName f == Ident "main" = getExp f
       | otherwise = expMain xs
 
-eval :: Exp -> Interpreter Valor
+eval :: Exp -> State RContext Valor
 eval x = case x of
   ECon exp0 exp -> do
     v0 <- eval exp0
@@ -69,7 +67,7 @@ eval x = case x of
     context <- get
     case safeLookup context (VarId id) of
       Just val -> return val
-      Nothing -> error ("Variavel nao existe")
+      Nothing -> error "Variavel nao existe"
   EIf exp expT expE -> do
     v0 <- eval exp
     if i v0 /= 0
